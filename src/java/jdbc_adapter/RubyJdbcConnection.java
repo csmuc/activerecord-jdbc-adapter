@@ -101,13 +101,15 @@ public class RubyJdbcConnection extends RubyObject {
         return (RubyModule) runtime.getModule("ActiveRecord").getConstant("ConnectionAdapters");
     }
 
+    
     @JRubyMethod(name = "begin")
     public IRubyObject begin(ThreadContext context) throws SQLException {
-        try {
-            getConnection(true).setAutoCommit(false);
-        } catch (Exception e) {
-            throw wrap(context, e);
-        }
+        withConnectionAndRetry(context, new SQLBlock() {
+            public Object call(Connection c) throws SQLException {
+                c.setAutoCommit(false);
+                return null;
+            }
+        });
 
         return context.getRuntime().getNil();
     }
@@ -425,21 +427,17 @@ public class RubyJdbcConnection extends RubyObject {
 
     @JRubyMethod(name = "rollback")
     public IRubyObject rollback(ThreadContext context) throws SQLException {
-        try {
-            Connection connection = getConnection(true);
-    
-            if (!connection.getAutoCommit()) {
-                try {
-                    connection.rollback();
-                } finally {
-                    connection.setAutoCommit(true);
-                }
+        Connection connection = getConnection(true);
+
+        if (!connection.getAutoCommit()) {
+            try {
+                connection.rollback();
+            } finally {
+                connection.setAutoCommit(true);
             }
-    
-            return context.getRuntime().getNil();
-        } catch (Exception e) {
-            throw wrap(context, e);
         }
+
+        return context.getRuntime().getNil();
     }
 
     @JRubyMethod(name = "select?", required = 1, meta = true, frame = false)
